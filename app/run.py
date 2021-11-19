@@ -1,23 +1,30 @@
 import json
 import plotly
 import pandas as pd
+import re
+import nltk
 
 from nltk.stem import WordNetLemmatizer
 from nltk.tokenize import word_tokenize
+nltk.download(['stopwords'])
+from nltk.corpus import stopwords
 
 from flask import Flask
 from flask import render_template, request, jsonify
 from plotly.graph_objs import Bar
 from sklearn.externals import joblib
 from sqlalchemy import create_engine
+from collections import Counter
 
 
 app = Flask(__name__)
 
 def tokenize(text):
+    text = re.sub(r"[^a-zA-Z]", " ", str(text))
     tokens = word_tokenize(text)
+    tokens =  [w for w in tokens if w not in stopwords.words('english')]
     lemmatizer = WordNetLemmatizer()
-
+        
     clean_tokens = []
     for tok in tokens:
         clean_tok = lemmatizer.lemmatize(tok).lower().strip()
@@ -26,12 +33,12 @@ def tokenize(text):
     return clean_tokens
 
 # load data
-engine = create_engine('sqlite:///../data/YourDatabaseName.db')
-df = pd.read_sql_table('YourTableName', engine)
+engine = create_engine('sqlite:///../data/DisasterResponse.db')
+df = pd.read_sql("SELECT * FROM Messages", engine)
+txt = pd.read_sql("SELECT * FROM MsgTokens WHERE Word NOT LIKE '[%' AND Word NOT IN ('i', 'the') order by Frequency desc LIMIT 10", engine)
 
 # load model
-model = joblib.load("../models/your_model_name.pkl")
-
+model = joblib.load("../models/classifier.pkl")
 
 # index webpage displays cool visuals and receives user input text for model
 @app.route('/')
@@ -43,24 +50,46 @@ def index():
     genre_counts = df.groupby('genre').count()['message']
     genre_names = list(genre_counts.index)
     
+    # graph 2
+    categories = df[df.columns[4:]]
+    pct_msg_cat = (categories.sum(axis=0)*(100/df.shape[0])).sort_values(ascending=True)
+    cat_names = list(pct_msg_cat.keys())
+         
     # create visuals
     # TODO: Below is an example - modify to create your own visuals
     graphs = [
+          {
+            'data': [
+                Bar(
+                    x=pct_msg_cat,
+                    y=cat_names,
+                    orientation='h'
+                )
+            ],
+            'layout': {
+                'title': 'Distribution of Message Categories',
+                'yaxis': {
+                    'title': "Categories"
+                },
+                'xaxis': {
+                    'title': "Percent"
+                }
+            }
+        },
         {
             'data': [
                 Bar(
-                    x=genre_names,
-                    y=genre_counts
+                    x=txt.Word,
+                    y=txt.Frequency
                 )
             ],
-
             'layout': {
-                'title': 'Distribution of Message Genres',
+                'title': 'Top Ten Words in Messages',
                 'yaxis': {
-                    'title': "Count"
+                    'title': "Word"
                 },
                 'xaxis': {
-                    'title': "Genre"
+                    'title': "Frequency"
                 }
             }
         }
@@ -72,7 +101,6 @@ def index():
     
     # render web page with plotly graphs
     return render_template('master.html', ids=ids, graphJSON=graphJSON)
-
 
 # web page that handles user query and displays model results
 @app.route('/go')

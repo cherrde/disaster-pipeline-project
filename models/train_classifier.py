@@ -58,16 +58,16 @@ def tokenize(text):
     Returns:
         (list) clean_tokens - list of cleaned tokens
     """
-    text = re.sub(r"[^a-zA-Z0-9]", " ", str(text))
+    text = re.sub(r"[^a-zA-Z]", " ", str(text))
 
     words = word_tokenize(text)
-
+    
     words = [w for w in words if w not in stopwords.words("english")]
-
+    
     stemmed = [PorterStemmer().stem(w) for w in words]
-
+    
     lemmatizer = WordNetLemmatizer()
-
+    
     clean_tokens = []
     for words in words:
         clean_tok = lemmatizer.lemmatize(words).lower().strip()
@@ -88,14 +88,16 @@ def build_model():
     pipeline = Pipeline([
     ('vect', CountVectorizer(tokenizer=tokenize)),
     ('tfidf', TfidfTransformer()),
-    ('clf', MultiOutputClassifier(RandomForestClassifier()))])
-
+    # ('clf', MultiOutputClassifier(RandomForestClassifier()))])
+    # ('clf', MultiOutputClassifier(DecisionTreeClassifier()))])
+    ('clf', MultiOutputClassifier(AdaBoostClassifier()))])
     parameters = {
-        'clf__estimator__n_estimators': [5] #,
+        'clf__estimator__n_estimators': [8] #,
         # 'clf__estimator__min_samples_split': [2, 3, 4],
         # 'clf__estimator__max_depth': [4, 6, 8]
+        # 'clf__estimator__max_depth': [5] # use only with DecisionTreeClassifier
          }
-
+    
     cv = GridSearchCV(estimator=pipeline, param_grid=parameters, cv=2, verbose=3)
 
     return cv
@@ -134,13 +136,13 @@ def main():
         print('Loading data...\n    DATABASE: {}'.format(database_filepath))
         X, Y, category_names = load_data(database_filepath)
         X_train, X_test, Y_train, Y_test = train_test_split(X, Y, test_size=0.2)
-
+        
         print('Building model...')
         model = build_model()
-
+        
         print('Training model...')
         model.fit(X_train, Y_train)
-
+        
         print('Evaluating model...')
         evaluate_model(model, X_test, Y_test, category_names)
 
